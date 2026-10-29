@@ -8,7 +8,7 @@
 <title>Esquina Viva Robledo</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <style>
 html{padding-top:env(safe-area-inset-top,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}
 /* Layout: one-column phone app, sticky header with the pickup countdown, five tabs at the bottom (one per module). Bag colors (blanca / verde / negra) are the semantic system. */
@@ -115,7 +115,7 @@ a{color:var(--accent)}
 </style>
 <script src="config.js"></script>
 <script src="vendor/supabase.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="vendor/leaflet/leaflet.js"></script>
 </head>
 <body>
 <header class="top"><div class="in">
@@ -279,7 +279,7 @@ const Store = (() => {
   cols.forEach(c => local[c] = lsGet("ev_"+c, []));
   const toRow = r => ({...r}); // rows map 1:1 to the page's objects
   async function pull(c){
-    const { data, error } = await sb.from(c).select("*").order("ts", {ascending:false}).limit(300);
+    const { data, error } = await sb.from(c).select("*").order("ts", {ascending:false}).limit(100);
     if (error) throw error; S[c] = data.map(toRow);
   }
   async function pullAll(){ try { await Promise.all(cols.map(pull)); S.shared = true; } catch (e) { console.warn("Supabase:", e); S.shared = false; } render(); }
@@ -289,7 +289,7 @@ const Store = (() => {
       if (cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase) {
         try { sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey); } catch (e) { sb = null; }
       }
-      if (sb) { await pullAll(); setInterval(pullAll, 8000); document.addEventListener("visibilitychange", () => { if (!document.hidden) pullAll(); }); }
+      if (sb) { await pullAll(); setInterval(() => { if (!document.hidden) pullAll(); }, 20000); document.addEventListener("visibilitychange", () => { if (!document.hidden) pullAll(); }); }
       else { cols.forEach(c => S[c] = local[c].slice()); render(); }
     },
     async add(c, data){
@@ -455,7 +455,7 @@ function render(){
   const f = franja(); const big = $("#acoBig");
   big.className = "big " + (f.isOpen ? "open" : "closed"); big.textContent = f.isOpen ? "ABIERTO" : "CERRADO"; big.style.fontSize = ".62rem";
   $("#acoTitle").textContent = f.isOpen ? "Franja de bolsas abierta" : "Franja de bolsas cerrada";
-  $("#acoText").textContent = f.isOpen ? `Puedes dejar tu bolsa hasta las ${fmtHora(f.close)}, cuando pasa el carro` : `Abre el ${DIAS[f.open.getDay()]} a las ${fmtHora(f.open)} Hasta entonces, guarda la bolsa en casa.`;
+  $("#acoText").textContent = f.isOpen ? `Puedes dejar tu bolsa hasta las ${fmtHora(f.close)}, cuando pasa el carro` : `Abre el ${DIAS[f.open.getDay()]} a las ${fmtHora(f.open)}. Hasta entonces, guarda la bolsa en casa.`;
   const ents = S.entregas.filter(e => e.cuadra===S.cuadra);
   $("#entList").innerHTML = ents.length ? ents.slice(0,20).map(e => `<div class="rank"><span class="pos" style="font-size:1rem">♻</span><span>${esc(e.casa||"Sin dato")} · ${esc(DIAS[+e.dia]||"")} ${e.franja==="am"?"7–9 a. m.":"5–7 p. m."}</span><span class="muted">${fmtRel(e.ts)}</span></div>`).join("") : `<div class="empty">Nadie ha agendado todavía en esta cuadra.</div>`;
   // guardián

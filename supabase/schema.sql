@@ -64,6 +64,12 @@ create policy "leer validaciones" on public.validaciones for select to anon usin
 create policy "crear validaciones" on public.validaciones for insert to anon with check (true);
 create policy "actualizar validaciones" on public.validaciones for update to anon using (true) with check (true);
 
+-- Permisos explícitos para la llave pública (anon / publishable). Sin borrar.
+grant usage on schema public to anon;
+grant select, insert, update on public.reportes to anon;
+grant select, insert on public.entregas to anon;
+grant select, insert, update on public.validaciones to anon;
+
 -- Consultas útiles para el pitch (resultados de la prueba)
 -- select tipo, count(*) from reportes group by tipo;
 -- select cuadra, count(*) filter (where acc) as bloquean_paso, count(*) as total from reportes group by cuadra;
@@ -73,7 +79,7 @@ create policy "actualizar validaciones" on public.validaciones for update to ano
 -- Cómo usarla: en Supabase abre SQL Editor > New query, pega y ejecuta.
 -- Luego consulta con: select * from public.resumen_prueba;
 drop view if exists public.resumen_prueba;
-create view public.resumen_prueba as
+create view public.resumen_prueba with (security_invoker = on) as
 select
   -- Reportes
   (select count(*) from public.reportes)                                        as total_reportes,
