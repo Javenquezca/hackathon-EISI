@@ -287,7 +287,7 @@ function setView(v){
   S.view = v; lsSet("ev_view", v);
   document.querySelectorAll("[data-view]").forEach(el => el.hidden = el.id !== "v-"+v);
   document.querySelectorAll("[data-tab]").forEach(b => b.setAttribute("aria-current", b.dataset.tab===v ? "page" : "false"));
-  if (v === "mapa" && _map) setTimeout(() => _map.invalidateSize(), 80);
+  if (v === "mapa" && _map) setTimeout(() => { _map.invalidateSize(); _map.fitBounds(L.latLngBounds(CUADRAS.map(c => [c.lat, c.lng])), {padding:[30,30], maxZoom:16}); }, 80);
   window.scrollTo({top:0});
 }
 
