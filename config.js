@@ -3,6 +3,6 @@
 // (Project Settings > API > Project URL y la llave "anon public").
 // Si los dejas vacíos, la app funciona en modo local: cada celular guarda solo sus propios datos.
 window.EV_CONFIG = {
-  supabaseUrl: "",
-  supabaseAnonKey: ""
+  supabaseUrl: "https://hjkssxgtgafxacdanrra.supabase.co",
+  supabaseAnonKey: "sb_publishable_qmWzLNrEYN4kn94vhbHNYw__cek4mJz"
 };
