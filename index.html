@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Esquina Viva: reporte ciudadano de puntos críticos de basura, horario del carro, reciclaje y guardianes de cuadra en Robledo, Medellín.">
-<meta name="theme-color" content="#072718">
+<meta name="theme-color" content="#16181A">
 <title>Esquina Viva Robledo</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;900&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600;700&display=swap">
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="css/styles.css">
 <script src="config.js"></script>
@@ -57,10 +57,16 @@
 <section id="v-mapa" data-view hidden>
   <h2>Mapa de puntos críticos</h2>
   <p class="muted">Robledo, Medellín. Toca un punto para ver el detalle del reporte.</p>
-  <div class="map-wrap"><div id="leafmap" style="height:100%;width:100%"></div></div>
-  <div class="legend"><span><i style="background:var(--crit)"></i>Bloquea el paso</span><span><i style="background:var(--warn)"></i>Basura fuera de horario</span><span><i style="background:var(--muted)"></i>Resuelto</span></div>
-  <div class="label">Reportes recientes</div>
-  <div class="list" id="repList"></div>
+  <div class="mapa-grid">
+    <div>
+      <div class="map-wrap"><div id="leafmap" style="height:100%;width:100%"></div></div>
+      <div class="legend"><span><i style="background:var(--crit)"></i>Bloquea el paso</span><span><i style="background:var(--warn)"></i>Basura fuera de horario</span><span><i style="background:var(--muted)"></i>Resuelto</span></div>
+    </div>
+    <div>
+      <div class="label">Reportes recientes</div>
+      <div class="list" id="repList"></div>
+    </div>
+  </div>
 </section>
 
 <!-- ===== 3. CUADRA ===== -->
