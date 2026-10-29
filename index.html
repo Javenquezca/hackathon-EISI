@@ -427,9 +427,8 @@ function renderMap(){
   if (!container) return;
   if (!_map) {
     _map = L.map("leafmap", {zoomControl:true}).setView([6.274, -75.601], 16);
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-      attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
-      subdomains:"abcd",
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       maxZoom:19
     }).addTo(_map);
     _markers = L.layerGroup().addTo(_map);
