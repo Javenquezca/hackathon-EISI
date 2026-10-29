@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Afiche QR · Esquina Viva</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+  :root{--accent:#1E6B45;--ink:#16241C;--muted:#5B6B61;--bg:#FFFFFF}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Atkinson Hyperlegible",system-ui,sans-serif}
+  .poster{max-width:560px;margin:0 auto;padding:28px 20px;display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center}
+  .band{background:var(--accent);color:#fff;border-radius:16px;padding:18px 20px;width:100%;box-sizing:border-box}
+  h1{font-family:"Bricolage Grotesque",system-ui,sans-serif;font-weight:800;font-size:2.4rem;margin:0}
+  .band p{margin:6px 0 0;font-size:1.05rem}
+  #qr{padding:14px;border:3px solid var(--accent);border-radius:16px;background:#fff}
+  #qr svg{display:block;max-width:100%;height:auto}
+  ul{text-align:left;font-size:1.05rem;line-height:1.5;margin:0;padding-left:1.2em}
+  .url{font-size:.85rem;color:var(--muted);word-break:break-all}
+  @media print{.noprint{display:none}}
+</style>
+</head>
+<body>
+<div class="poster">
+  <div class="band"><h1>Esquina Viva</h1><p>¿Ves basura en esta esquina? Escanea y repórtala en 20 segundos.</p></div>
+  <div id="qr" role="img" aria-label="Código QR de la app Esquina Viva"></div>
+  <ul>
+    <li>Reporta con foto si hay bolsas fuera de horario o el andén está bloqueado.</li>
+    <li>Mira a qué hora pasa el carro y cuándo está abierta la franja de bolsas.</li>
+    <li>Entrega tu bolsa blanca en mano al reciclador y suma puntos para tu cuadra.</li>
+  </ul>
+  <p class="url" id="url"></p>
+  <p class="noprint url">Imprime esta página (Ctrl + P) para pegarla en la esquina.</p>
+</div>
+<script src="vendor/qrcode-generator.js"></script>
+<script>
+  const appUrl = new URL("./", location.href).href; // index.html de este mismo sitio
+  document.getElementById("url").textContent = appUrl;
+  const qr = qrcode(0, "M"); qr.addData(appUrl); qr.make();
+  document.getElementById("qr").innerHTML = qr.createSvgTag({cellSize: 7, margin: 2, scalable: false});
+</script>
+</body>
+</html>

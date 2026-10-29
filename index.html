@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Esquina Viva: reporte ciudadano de puntos críticos de basura, horario del carro, reciclaje y guardianes de cuadra en Robledo, Medellín.">
+<meta name="theme-color" content="#1E6B45">
+<title>Esquina Viva Robledo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+html{padding-top:env(safe-area-inset-top,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}
+/* Layout: one-column phone app, sticky header with the pickup countdown, five tabs at the bottom (one per module). Bag colors (blanca / verde / negra) are the semantic system. */
+:root{
+  --bg:#F3F6F2; --surface:#FFFFFF; --ink:#16241C; --muted:#5B6B61; --line:#D9E2DA;
+  --accent:#1E6B45; --accent-ink:#FFFFFF; --accent-soft:#DDEFE3;
+  --warn:#C2410C; --warn-soft:#FDE8DC; --crit:#B42318; --crit-soft:#FBE3E1; --ok:#1E7A3C;
+  --bag-white:#FFFFFF; --bag-green:#2E8B4E; --bag-black:#1D1D1F;
+  --street:#E4E9E3; --block:#CFDCCF;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --r:14px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F1712; --surface:#17221B; --ink:#E7EFE9; --muted:#9DB0A3; --line:#2A3A30;
+  --accent:#5CC48A; --accent-ink:#0B1A11; --accent-soft:#1D3527;
+  --warn:#F2994A; --warn-soft:#3A2516; --crit:#F2766B; --crit-soft:#3B1C1A; --ok:#5CC48A;
+  --bag-white:#E9EEEA; --bag-green:#4DB873; --bag-black:#05080A;
+  --street:#1C2A21; --block:#26382C; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1712; --surface:#17221B; --ink:#E7EFE9; --muted:#9DB0A3; --line:#2A3A30;
+  --accent:#5CC48A; --accent-ink:#0B1A11; --accent-soft:#1D3527;
+  --warn:#F2994A; --warn-soft:#3A2516; --crit:#F2766B; --crit-soft:#3B1C1A; --ok:#5CC48A;
+  --bag-white:#E9EEEA; --bag-green:#4DB873; --bag-black:#05080A;
+  --street:#1C2A21; --block:#26382C; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.45}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--accent)}
+.wrap{max-width:560px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px 110px;display:flex;flex-direction:column;gap:14px}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--accent);color:var(--accent-ink)}
+header.top .in{max-width:560px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 12px;display:flex;flex-direction:column;gap:8px}
+.brand{display:flex;flex-direction:column;gap:8px}
+.brand h1{font-family:var(--f-display);font-weight:800;font-size:1.45rem;margin:0;letter-spacing:-.01em}
+.brand small{font-size:.78rem;opacity:.85;letter-spacing:.04em;text-transform:uppercase}
+select,input,textarea,button{font:inherit;color:inherit}
+.cuadra-sel{background:color-mix(in srgb,var(--accent-ink) 14%,transparent);border:1px solid color-mix(in srgb,var(--accent-ink) 35%,transparent);color:var(--accent-ink);border-radius:999px;padding:6px 10px;width:100%}
+.cuadra-sel option{color:#16241C;background:#fff}
+.alert{display:flex;gap:10px;align-items:center;background:color-mix(in srgb,var(--accent-ink) 12%,transparent);border-radius:10px;padding:8px 10px;font-size:.92rem}
+.alert.hot{background:var(--warn);color:#fff}
+.truck{flex:none;width:28px;height:28px}
+h2{font-family:var(--f-display);font-weight:800;font-size:1.3rem;margin:4px 0 0;text-wrap:balance}
+h3{font-family:var(--f-display);font-weight:600;font-size:1.05rem;margin:0}
+p{margin:0}
+.muted{color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.label{font-size:.75rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1.5px solid var(--line);background:var(--surface);border-radius:12px;padding:9px 12px;cursor:pointer;text-align:left;display:flex;gap:8px;align-items:center}
+.chip[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);font-weight:700}
+.chip .dot{width:10px;height:10px;border-radius:50%;flex:none}
+.btn{background:var(--accent);color:var(--accent-ink);border:0;border-radius:12px;padding:13px 16px;font-weight:700;cursor:pointer;width:100%}
+.btn.ghost{background:transparent;color:var(--accent);border:1.5px solid var(--accent)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{outline:3px solid var(--warn);outline-offset:2px}
+textarea,input[type=text]{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px}
+.photo-pick{display:flex;align-items:center;gap:12px;border:1.5px dashed var(--line);border-radius:12px;padding:12px;cursor:pointer}
+.photo-pick img{width:72px;height:72px;object-fit:cover;border-radius:8px}
+.check{display:flex;gap:10px;align-items:flex-start}
+.check input{width:22px;height:22px;margin-top:2px;accent-color:var(--crit)}
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+.tabs .in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr)}
+.tabs button{background:none;border:0;padding:9px 2px 10px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:.72rem;color:var(--muted);cursor:pointer}
+.tabs button svg{width:24px;height:24px}
+.tabs button[aria-current="page"]{color:var(--accent);font-weight:700}
+.list{display:flex;flex-direction:column;gap:10px}
+.rep{display:grid;grid-template-columns:64px 1fr;gap:12px;align-items:start}
+.rep img,.rep .noimg{width:64px;height:64px;border-radius:10px;object-fit:cover;background:var(--street)}
+.rep .meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:.85rem;color:var(--muted)}
+.pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:2px 9px;font-size:.78rem;font-weight:700}
+.pill.crit{background:var(--crit-soft);color:var(--crit)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.ok{background:var(--accent-soft);color:var(--ok)}
+.stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px;min-width:0}
+.stat b{display:block;font-family:var(--f-display);font-size:1.8rem;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1}
+.stat span{font-size:.78rem;color:var(--muted)}
+.rank{display:grid;grid-template-columns:28px 1fr auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.rank:last-child{border-bottom:0}
+.rank .pos{font-family:var(--f-display);font-weight:800;font-size:1.2rem;color:var(--muted)}
+.rank.me .pos{color:var(--accent)}
+.coupon{border:2px dashed var(--accent);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:4px;background:var(--accent-soft)}
+.coupon code{font-family:var(--f-display);font-size:1.4rem;font-weight:800;letter-spacing:.06em}
+.status{display:flex;align-items:center;gap:12px}
+.status .big{width:54px;height:54px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-family:var(--f-display);flex:none}
+.status .big.open{background:var(--accent);color:var(--accent-ink)}
+.status .big.closed{background:var(--street);color:var(--muted)}
+.bags{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.bag{border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:6px;font-size:.85rem;min-width:0}
+.bag i{display:block;width:26px;height:30px;border-radius:6px 6px 10px 10px;border:1.5px solid var(--line)}
+.map-wrap{border-radius:var(--r);overflow:hidden;border:1px solid var(--line);background:var(--street);height:320px}
+.cuadra-tip{background:var(--surface);border:1px solid var(--line);color:var(--ink);font-family:var(--f-body);font-size:.78rem;font-weight:700;padding:3px 8px;border-radius:8px;box-shadow:none}
+.cuadra-tip::before{display:none}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:.82rem;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:9;background:var(--ink);color:var(--bg);padding:12px 16px;border-radius:12px;max-width:min(92vw,520px);font-size:.95rem;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.mode{font-size:.8rem;color:var(--muted);text-align:center}
+.seg{display:flex;gap:8px}
+.seg .chip{flex:1;justify-content:center}
+.empty{padding:16px;border:1.5px dashed var(--line);border-radius:var(--r);color:var(--muted);text-align:center}
+a{color:var(--accent)}
+@media (prefers-reduced-motion: no-preference){.toast{animation:up .25s ease}@keyframes up{from{transform:translate(-50%,10px);opacity:0}}}
+</style>
+<script src="config.js"></script>
+<script src="vendor/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+</head>
+<body>
+<header class="top"><div class="in">
+  <div class="brand">
+    <div><small>Robledo · Comuna 7 · Medellín</small><h1>Esquina Viva</h1></div>
+    <label class="sr" for="cuadra" hidden>Tu cuadra</label>
+    <select id="cuadra" class="cuadra-sel" aria-label="Tu cuadra"></select>
+  </div>
+  <div id="alert" class="alert" role="status">
+    <svg class="truck" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="9" width="17" height="13" rx="2" fill="none"/><path d="M19 13h6l4 5v4h-10z" fill="none"/><circle cx="8" cy="24" r="2.5" fill="currentColor"/><circle cx="24" cy="24" r="2.5" fill="currentColor"/></svg>
+    <div id="alertText">Calculando el próximo paso del carro…</div>
+  </div>
+</div></header>
+
+<main class="wrap">
+
+<!-- ===== 1. REPORTAR ===== -->
+<section id="v-reportar" data-view>
+  <h2>Reporta un punto con basura</h2>
+  <p class="muted">Toma la foto, elige qué ves y envía. Tu reporte alimenta el mapa de Robledo.</p>
+  <form id="fRep" class="card" novalidate>
+    <label class="photo-pick" for="repFoto">
+      <img id="repPrev" alt="" hidden>
+      <span id="repPrevPh">Tomar o subir foto (opcional)</span>
+      <input id="repFoto" type="file" accept="image/*" capture="environment" hidden>
+    </label>
+    <div class="label">¿Qué ves?</div>
+    <div class="chips" id="tipos"></div>
+    <label class="check" for="repAcc"><input id="repAcc" type="checkbox"><span><b>Bloquea el paso</b> de sillas de ruedas, coches o personas mayores (obliga a bajarse a la calle)</span></label>
+    <label for="repNota" class="label">Detalle (opcional)</label>
+    <textarea id="repNota" rows="2" placeholder="Ej.: bolsas al pie del árbol del separador, frente al bar"></textarea>
+    <div id="emvarias" class="card" style="background:var(--warn-soft);border-color:transparent" hidden>
+      <p><b>Escombros y voluminosos</b> los recoge Emvarias con solicitud previa.</p>
+      <a href="https://www.emvarias.com.co" target="_blank" rel="noopener">Solicitar recolección en Emvarias</a>
+    </div>
+    <button class="btn" id="repBtn" type="submit">Enviar reporte</button>
+  </form>
+</section>
+
+<!-- ===== 2. MAPA ===== -->
+<section id="v-mapa" data-view hidden>
+  <h2>Mapa de puntos críticos</h2>
+  <p class="muted">Robledo, Medellín. Toca un punto para ver el detalle del reporte.</p>
+  <div class="map-wrap"><div id="leafmap" style="height:100%;width:100%"></div></div>
+  <div class="legend"><span><i style="background:var(--crit)"></i>Bloquea el paso</span><span><i style="background:var(--warn)"></i>Basura fuera de horario</span><span><i style="background:var(--muted)"></i>Resuelto</span></div>
+  <div class="label">Reportes recientes</div>
+  <div class="list" id="repList"></div>
+</section>
+
+<!-- ===== 3. CUADRA ===== -->
+<section id="v-cuadra" data-view hidden>
+  <h2 id="cuadraTitle">Tablero de la cuadra</h2>
+  <div class="stat-row">
+    <div class="stat"><b id="sInv">0</b><span>días invictos</span></div>
+    <div class="stat"><b id="sPts">0</b><span>puntos</span></div>
+    <div class="stat"><b id="sRep">0</b><span>reportes este mes</span></div>
+  </div>
+  <p class="muted" style="font-size:.85rem">Día invicto: el guardián validó con foto que el punto amaneció limpio. Puntos: 20 por día invicto y 10 por cada entrega de reciclaje al reciclador.</p>
+  <div id="coupon"></div>
+  <div class="card">
+    <h3>Reto entre cuadras · <span id="mes"></span></h3>
+    <p class="muted" style="font-size:.88rem">Gana la cuadra con menos reportes en el mes. Empate: más puntos.</p>
+    <div id="ranking"></div>
+  </div>
+</section>
+
+<!-- ===== 4. RECICLAJE ===== -->
+<section id="v-reciclaje" data-view hidden>
+  <h2>Reciclaje y punto de acopio</h2>
+  <div class="card">
+    <div class="status"><div id="acoBig" class="big closed">—</div><div><h3 id="acoTitle">Punto de acopio</h3><p class="muted" id="acoText"></p></div></div>
+    <p style="font-size:.9rem">Las bolsas van <b>solo en la franja demarcada</b> del andén y solo en ese horario. El resto del andén queda libre para caminar.</p>
+  </div>
+  <div class="bags">
+    <div class="bag"><i style="background:var(--bag-white)"></i><b>Blanca</b><span class="muted">Reciclable limpio y seco: papel, cartón, plástico, vidrio, latas</span></div>
+    <div class="bag"><i style="background:var(--bag-green)"></i><b>Verde</b><span class="muted">Orgánicos: restos de comida</span></div>
+    <div class="bag"><i style="background:var(--bag-black)"></i><b>Negra</b><span class="muted">No aprovechables</span></div>
+  </div>
+  <form id="fEnt" class="card" novalidate>
+    <h3>Entrega tu bolsa blanca en mano al reciclador</h3>
+    <p class="muted" style="font-size:.88rem">Así el material no toca el piso y llega limpio. Cada entrega suma 10 puntos a tu cuadra.</p>
+    <div class="label">Día</div>
+    <div class="seg" id="entDia"></div>
+    <div class="label">Franja</div>
+    <div class="seg" id="entFranja"></div>
+    <label for="entCasa" class="label">Casa o apartamento (sin nombres)</label>
+    <input id="entCasa" type="text" placeholder="Ej.: Casa 12 o Apto 301">
+    <button class="btn" type="submit">Agendar entrega</button>
+  </form>
+  <div class="card"><h3>Entregas agendadas en tu cuadra</h3><div class="list" id="entList"></div></div>
+</section>
+
+<!-- ===== 5. GUARDIÁN ===== -->
+<section id="v-guardian" data-view hidden>
+  <h2>Guardián de la esquina</h2>
+  <p class="muted">Para el celador o el comerciante aliado: una foto al día a la misma hora valida si la cuadra suma su día invicto.</p>
+  <form id="fVal" class="card" novalidate>
+    <h3>Validación de hoy · <span id="hoy"></span></h3>
+    <label class="photo-pick" for="valFoto">
+      <img id="valPrev" alt="" hidden>
+      <span id="valPrevPh">Foto del punto (7:00 a. m. recomendado)</span>
+      <input id="valFoto" type="file" accept="image/*" capture="environment" hidden>
+    </label>
+    <div class="seg" id="valEstado"></div>
+    <button class="btn" type="submit">Guardar validación</button>
+    <p id="valDone" class="muted" hidden></p>
+  </form>
+  <div class="card">
+    <h3>Reportes abiertos en tu cuadra</h3>
+    <div class="list" id="guardList"></div>
+  </div>
+  <div class="card">
+    <h3>Aviso a los vecinos</h3>
+    <p class="muted" style="font-size:.88rem">En la versión final este aviso llega por WhatsApp 30 minutos antes de que pase el carro. Aquí puedes ver cómo se vería.</p>
+    <button class="btn ghost" id="simAlert" type="button">Probar aviso de 30 minutos</button>
+  </div>
+  <p class="mode" id="mode"></p>
+</section>
+
+</main>
+
+<nav class="tabs" aria-label="Secciones"><div class="in" id="tabs"></div></nav>
+<div id="toast" class="toast" role="status" hidden></div>
+
+<script>
+(() => {
+"use strict";
+// ---------- Config ----------
+const CUADRAS = [
+  {id:"c1", name:"Cuadra 1 · Separador de la avenida", short:"Separador avenida", lat:6.2745, lng:-75.5998},
+  {id:"c2", name:"Cuadra 2 · Curazao (Cra. 90D)", short:"Curazao", lat:6.2768, lng:-75.6045},
+  {id:"c3", name:"Cuadra 3 · Entorno universitario", short:"Universidad", lat:6.2710, lng:-75.5975},
+];
+const TIPOS = [
+  {id:"fuera", label:"Bolsas fuera de horario", color:"var(--warn)"},
+  {id:"suelta", label:"Basura suelta o empaques", color:"var(--warn)"},
+  {id:"escombros", label:"Escombros o voluminosos", color:"var(--crit)"},
+  {id:"anden", label:"Andén ocupado", color:"var(--crit)"},
+];
+// Recolección según el residente: miércoles y viernes. Hora de ejemplo (por confirmar con Emvarias).
+const PICKUP = {days:[3,5], hour:19, minute:0};
+const FRANJA_MIN = 60; // la franja demarcada abre 60 min antes del carro
+const DIAS = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pad = n => String(n).padStart(2,"0");
+const dayKey = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const fmtHora = d => { let h=d.getHours(), m=pad(d.getMinutes()); const ap = h>=12?"p. m.":"a. m."; h = h%12||12; return `${h}:${m} ${ap}`; };
+const fmtRel = ts => { const s=(Date.now()-ts)/1000; if(s<60) return "hace un momento"; if(s<3600) return `hace ${Math.round(s/60)} min`; if(s<86400) return `hace ${Math.round(s/3600)} h`; return `hace ${Math.round(s/86400)} d`; };
+const lsGet = (k,d) => { try { const v = localStorage.getItem(k); return v==null?d:JSON.parse(v); } catch { return d; } };
+const lsSet = (k,v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+
+// ---------- State ----------
+const S = { cuadra: lsGet("ev_cuadra","c1"), view: "reportar", reportes: [], entregas: [], validaciones: [], tipo: null, foto: null, valFoto: null, valLimpio: null, entDia: null, entFranja: null, shared: false };
+
+// ---------- Store (db capability, with per-device fallback) ----------
+const Store = (() => {
+  // Shared mode: Supabase (configure config.js). Fallback: data stays on this device (localStorage).
+  const cfg = window.EV_CONFIG || {};
+  let sb = null; const local = {}; const cols = ["reportes","entregas","validaciones"];
+  cols.forEach(c => local[c] = lsGet("ev_"+c, []));
+  const toRow = r => ({...r}); // rows map 1:1 to the page's objects
+  async function pull(c){
+    const { data, error } = await sb.from(c).select("*").order("ts", {ascending:false}).limit(300);
+    if (error) throw error; S[c] = data.map(toRow);
+  }
+  async function pullAll(){ try { await Promise.all(cols.map(pull)); S.shared = true; } catch (e) { console.warn("Supabase:", e); S.shared = false; } render(); }
+  function saveLocal(c){ lsSet("ev_"+c, local[c]); S[c] = local[c].slice(); render(); }
+  return {
+    async init(){
+      if (cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase) {
+        try { sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey); } catch (e) { sb = null; }
+      }
+      if (sb) { await pullAll(); setInterval(pullAll, 8000); document.addEventListener("visibilitychange", () => { if (!document.hidden) pullAll(); }); }
+      else { cols.forEach(c => S[c] = local[c].slice()); render(); }
+    },
+    async add(c, data){
+      if (sb) { const { error } = await sb.from(c).insert(data); if (error) throw error; await pull(c); render(); return; }
+      local[c].unshift({id: (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)), ...data}); saveLocal(c);
+    },
+    async put(c, id, data){
+      if (sb) { const { error } = await sb.from(c).upsert({id, ...data}); if (error) throw error; await pull(c); render(); return; }
+      local[c] = local[c].filter(x => x.id !== id); local[c].unshift({id, ...data}); saveLocal(c);
+    },
+    async patch(c, id, data){
+      if (sb) { const { error } = await sb.from(c).update(data).eq("id", id); if (error) throw error; await pull(c); render(); return; }
+      local[c] = local[c].map(x => x.id===id ? {...x, ...data} : x); saveLocal(c);
+    },
+    get isShared(){ return !!sb && S.shared; }
+  };
+})();
+
+// ---------- Photos: compress to a small JPEG ----------
+function compress(file, max=520, q=0.6){
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload = () => { const img = new Image(); img.onload = () => {
+      const k = Math.min(1, max/Math.max(img.width,img.height));
+      const c = document.createElement("canvas"); c.width = Math.round(img.width*k); c.height = Math.round(img.height*k);
+      c.getContext("2d").drawImage(img,0,0,c.width,c.height); res(c.toDataURL("image/jpeg", q));
+    }; img.onerror = rej; img.src = fr.result; };
+    fr.onerror = rej; fr.readAsDataURL(file);
+  });
+}
+
+// ---------- Time helpers ----------
+function nextPickup(from = new Date()){
+  for (let i=0;i<8;i++){
+    const d = new Date(from); d.setDate(d.getDate()+i); d.setHours(PICKUP.hour, PICKUP.minute, 0, 0);
+    if (PICKUP.days.includes(d.getDay()) && d > from) return d;
+  }
+}
+function franja(now = new Date()){
+  const p = nextPickup(new Date(now.getTime() - 1)); const open = new Date(p.getTime() - FRANJA_MIN*60000);
+  return {open, close:p, isOpen: now >= open && now < p};
+}
+
+// ---------- Toast ----------
+let tT; function toast(msg){ const t=$("#toast"); t.textContent=msg; t.hidden=false; clearTimeout(tT); tT=setTimeout(()=>t.hidden=true, 4200); }
+
+// ---------- Derived metrics ----------
+function metrics(cid){
+  const now = new Date(); const m0 = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  const reps = S.reportes.filter(r => r.cuadra===cid);
+  const repMes = reps.filter(r => r.ts >= m0).length;
+  const vals = S.validaciones.filter(v => v.cuadra===cid);
+  const limpio = new Set(vals.filter(v => v.limpio).map(v => v.fecha));
+  let inv = 0; const d = new Date();
+  if (!limpio.has(dayKey(d))) d.setDate(d.getDate()-1); // today not yet validated: count from yesterday
+  while (limpio.has(dayKey(d))) { inv++; d.setDate(d.getDate()-1); }
+  const ents = S.entregas.filter(e => e.cuadra===cid).length;
+  const pts = limpio.size*20 + ents*10;
+  return {repMes, inv, pts, ents, abiertos: reps.filter(r => r.estado!=="resuelto")};
+}
+
+// ---------- Render ----------
+const ICONS = {
+  reportar:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+  mapa:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/></svg>',
+  cuadra:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
+  reciclaje:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 7h10l-1 13H8z"/><path d="M5 7h14M10 4h4"/></svg>',
+  guardian:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg>',
+};
+const TABS = [["reportar","Reportar"],["mapa","Mapa"],["cuadra","Cuadra"],["reciclaje","Reciclaje"],["guardian","Guardián"]];
+
+function renderStatic(){
+  $("#cuadra").innerHTML = CUADRAS.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
+  $("#cuadra").value = S.cuadra;
+  $("#tabs").innerHTML = TABS.map(([id,l]) => `<button type="button" data-tab="${id}">${ICONS[id]}<span>${l}</span></button>`).join("");
+  $("#tipos").innerHTML = TIPOS.map(t => `<button type="button" class="chip" data-tipo="${t.id}" aria-pressed="false"><span class="dot" style="background:${t.color}"></span>${esc(t.label)}</button>`).join("");
+  const days = PICKUP.days.map(d => [String(d), DIAS[d][0].toUpperCase()+DIAS[d].slice(1)]);
+  $("#entDia").innerHTML = days.map(([v,l]) => `<button type="button" class="chip" data-v="${v}" aria-pressed="false">${l}</button>`).join("");
+  $("#entFranja").innerHTML = [["am","7–9 a. m."],["pm","5–7 p. m."]].map(([v,l]) => `<button type="button" class="chip" data-v="${v}" aria-pressed="false">${l}</button>`).join("");
+  $("#valEstado").innerHTML = `<button type="button" class="chip" data-v="1" aria-pressed="false">Amaneció limpio</button><button type="button" class="chip" data-v="0" aria-pressed="false">Hay basura</button>`;
+  $("#hoy").textContent = new Date().toLocaleDateString("es-CO",{weekday:"long", day:"numeric", month:"short"});
+  $("#mes").textContent = new Date().toLocaleDateString("es-CO",{month:"long"});
+}
+
+function setView(v){
+  S.view = v; lsSet("ev_view", v);
+  document.querySelectorAll("[data-view]").forEach(el => el.hidden = el.id !== "v-"+v);
+  document.querySelectorAll("[data-tab]").forEach(b => b.setAttribute("aria-current", b.dataset.tab===v ? "page" : "false"));
+  if (v === "mapa" && _map) setTimeout(() => _map.invalidateSize(), 80);
+  window.scrollTo({top:0});
+}
+
+function renderAlert(){
+  const now = new Date(); const p = nextPickup(now); const mins = Math.round((p-now)/60000);
+  const el = $("#alert"); const tx = $("#alertText");
+  const dia = DIAS[p.getDay()];
+  if (mins <= 30){ el.classList.add("hot"); tx.innerHTML = `<b>El carro pasa en ${mins} min.</b> Lleva tu bolsa a la franja demarcada.`; }
+  else { el.classList.remove("hot");
+    const h = Math.floor(mins/60), d = Math.floor(h/24);
+    const falta = d>=1 ? `${d} d ${h%24} h` : h>=1 ? `${h} h ${mins%60} min` : `${mins} min`;
+    tx.innerHTML = `Próximo carro: <b>${dia} ${fmtHora(p)}</b> · faltan ${falta}. No saques la bolsa antes.`; }
+}
+
+function repItem(r, withAction){
+  const t = TIPOS.find(x => x.id===r.tipo) || {label:"Reporte"};
+  const c = CUADRAS.find(x => x.id===r.cuadra);
+  const pill = r.estado==="resuelto" ? `<span class="pill ok">Resuelto</span>` : r.acc ? `<span class="pill crit">Bloquea el paso</span>` : `<span class="pill warn">Abierto</span>`;
+  const img = r.foto ? `<img src="${esc(r.foto)}" alt="Foto del reporte">` : `<div class="noimg" aria-hidden="true"></div>`;
+  const act = withAction && r.estado!=="resuelto" ? `<button class="btn ghost" style="padding:8px 10px;margin-top:6px" type="button" data-resolve="${esc(r.id)}">Marcar como resuelto</button>` : "";
+  return `<div class="card rep">${img}<div style="min-width:0;display:flex;flex-direction:column;gap:4px"><b>${esc(t.label)}</b><div class="meta">${pill}<span>${esc(c?c.short:"")}</span><span>· ${fmtRel(r.ts)}</span></div>${r.nota?`<p style="font-size:.9rem">${esc(r.nota)}</p>`:""}${act}</div></div>`;
+}
+
+let _map = null, _markers = null;
+function renderMap(){
+  if (!window.L) return;
+  const container = document.getElementById("leafmap");
+  if (!container) return;
+  if (!_map) {
+    _map = L.map("leafmap", {zoomControl:true}).setView([6.274, -75.601], 16);
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+      attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
+      subdomains:"abcd",
+      maxZoom:19
+    }).addTo(_map);
+    _markers = L.layerGroup().addTo(_map);
+    CUADRAS.forEach(c => {
+      L.circle([c.lat, c.lng], {radius:40, color:"#1E6B45", weight:2, fillColor:"#1E6B45", fillOpacity:0.12})
+        .bindTooltip(c.short, {permanent:true, direction:"top", className:"cuadra-tip"})
+        .addTo(_map);
+    });
+  }
+  _markers.clearLayers();
+  const hash = str => { let h=0; for (const ch of String(str)) h=(h*31+ch.charCodeAt(0))>>>0; return h; };
+  S.reportes.slice(0,120).forEach(r => {
+    const c = CUADRAS.find(x => x.id===r.cuadra); if (!c) return;
+    const col = r.estado==="resuelto" ? "#5B6B61" : (r.acc||r.tipo==="escombros"||r.tipo==="anden") ? "#B42318" : "#C2410C";
+    const h = hash(r.id);
+    const dlat = ((h%200)-100)/80000, dlng = (((h>>8)%200)-100)/80000;
+    const t = TIPOS.find(x => x.id===r.tipo)||{label:"Reporte"};
+    L.circleMarker([c.lat+dlat, c.lng+dlng], {radius:9, color:"#fff", weight:2, fillColor:col, fillOpacity:.9})
+      .bindPopup(`<b>${esc(t.label)}</b><br><span style="color:#5B6B61">${esc(c.short)} · ${fmtRel(r.ts)}</span>${r.acc?`<br><b style="color:#B42318">⚠ Bloquea el paso</b>`:""}${r.nota?`<br>${esc(r.nota)}`:""}${r.estado==="resuelto"?`<br><span style="color:#1E7A3C">✓ Resuelto</span>`:""}`)
+      .addTo(_markers);
+  });
+  setTimeout(() => _map && _map.invalidateSize(), 80);
+}
+
+function render(){
+  renderAlert();
+  // mapa + lista
+  renderMap();
+  $("#repList").innerHTML = S.reportes.length ? S.reportes.slice(0,25).map(r => repItem(r,false)).join("") : `<div class="empty">Aún no hay reportes. El primero que envíes aparece aquí y en el mapa.</div>`;
+  // cuadra
+  const cq = CUADRAS.find(c => c.id===S.cuadra); const m = metrics(S.cuadra);
+  $("#cuadraTitle").textContent = cq.name;
+  $("#sInv").textContent = m.inv; $("#sPts").textContent = m.pts; $("#sRep").textContent = m.repMes;
+  const unlocked = m.inv >= 3 || m.ents >= 1;
+  $("#coupon").innerHTML = unlocked
+    ? `<div class="coupon"><span class="label">Cupón de la tienda aliada</span><code>ROBLEDO-10</code><span>10 % en la tienda de la cuadra. Cupón de ejemplo: el aliado está por confirmar.</span></div>`
+    : `<div class="card"><h3>Cupón de la tienda aliada</h3><p class="muted">Se desbloquea con 3 días invictos o con la primera entrega de reciclaje de la cuadra.</p></div>`;
+  const rk = CUADRAS.map(c => ({c, ...metrics(c.id)})).sort((a,b) => a.repMes-b.repMes || b.pts-a.pts);
+  $("#ranking").innerHTML = rk.map((r,i) => `<div class="rank ${r.c.id===S.cuadra?"me":""}"><span class="pos">${i+1}</span><span>${esc(r.c.short)}${r.c.id===S.cuadra?" <span class=\"pill ok\">tu cuadra</span>":""}</span><span class="muted" style="font-variant-numeric:tabular-nums">${r.repMes} rep. · ${r.pts} pts</span></div>`).join("");
+  // reciclaje
+  const f = franja(); const big = $("#acoBig");
+  big.className = "big " + (f.isOpen ? "open" : "closed"); big.textContent = f.isOpen ? "ABIERTO" : "CERRADO"; big.style.fontSize = ".62rem";
+  $("#acoTitle").textContent = f.isOpen ? "Franja de bolsas abierta" : "Franja de bolsas cerrada";
+  $("#acoText").textContent = f.isOpen ? `Puedes dejar tu bolsa hasta las ${fmtHora(f.close)}, cuando pasa el carro` : `Abre el ${DIAS[f.open.getDay()]} a las ${fmtHora(f.open)} Hasta entonces, guarda la bolsa en casa.`;
+  const ents = S.entregas.filter(e => e.cuadra===S.cuadra);
+  $("#entList").innerHTML = ents.length ? ents.slice(0,20).map(e => `<div class="rank"><span class="pos" style="font-size:1rem">♻</span><span>${esc(e.casa||"Sin dato")} · ${esc(DIAS[+e.dia]||"")} ${e.franja==="am"?"7–9 a. m.":"5–7 p. m."}</span><span class="muted">${fmtRel(e.ts)}</span></div>`).join("") : `<div class="empty">Nadie ha agendado todavía en esta cuadra.</div>`;
+  // guardián
+  const g = m.abiertos;
+  $("#guardList").innerHTML = g.length ? g.slice(0,20).map(r => repItem(r,true)).join("") : `<div class="empty">Sin reportes abiertos en ${esc(cq.short)}.</div>`;
+  const today = S.validaciones.find(v => v.cuadra===S.cuadra && v.fecha===dayKey(new Date()));
+  const vd = $("#valDone"); vd.hidden = !today; if (today) vd.textContent = `Hoy ya se validó: ${today.limpio ? "amaneció limpio" : "había basura"} (${fmtHora(new Date(today.ts))}). Puedes actualizarla.`;
+  $("#mode").textContent = Store.isShared ? "Datos compartidos: todos ven los mismos reportes." : "Modo local: los datos se guardan solo en este celular. Configura Supabase en config.js para compartirlos.";
+}
+
+// ---------- Events ----------
+function wireSeg(sel, key){
+  $(sel).addEventListener("click", e => { const b = e.target.closest("[data-v]"); if(!b) return;
+    S[key] = b.dataset.v; $(sel).querySelectorAll("[data-v]").forEach(x => x.setAttribute("aria-pressed", x===b?"true":"false")); });
+}
+function wire(){
+  $("#tabs").addEventListener("click", e => { const b = e.target.closest("[data-tab]"); if (b) setView(b.dataset.tab); });
+  $("#cuadra").addEventListener("change", e => { S.cuadra = e.target.value; lsSet("ev_cuadra", S.cuadra); render(); });
+  $("#tipos").addEventListener("click", e => { const b = e.target.closest("[data-tipo]"); if(!b) return;
+    S.tipo = b.dataset.tipo; $("#tipos").querySelectorAll("[data-tipo]").forEach(x => x.setAttribute("aria-pressed", x===b?"true":"false"));
+    $("#emvarias").hidden = S.tipo !== "escombros"; });
+  $("#repFoto").addEventListener("change", async e => { const f = e.target.files[0]; if(!f) return;
+    try { S.foto = await compress(f); $("#repPrev").src = S.foto; $("#repPrev").hidden=false; $("#repPrevPh").textContent = "Foto lista. Toca para cambiarla."; } catch { toast("No se pudo leer la foto. Intenta con otra."); } });
+  $("#valFoto").addEventListener("change", async e => { const f = e.target.files[0]; if(!f) return;
+    try { S.valFoto = await compress(f); $("#valPrev").src = S.valFoto; $("#valPrev").hidden=false; $("#valPrevPh").textContent = "Foto lista. Toca para cambiarla."; } catch { toast("No se pudo leer la foto. Intenta con otra."); } });
+  $("#fRep").addEventListener("submit", async e => { e.preventDefault();
+    if (!S.tipo) { toast("Elige qué ves antes de enviar."); return; }
+    const btn = $("#repBtn"); btn.disabled = true;
+    try {
+      await Store.add("reportes", {cuadra:S.cuadra, tipo:S.tipo, acc:$("#repAcc").checked, nota:$("#repNota").value.trim().slice(0,280), foto:S.foto||"", ts:Date.now(), estado:"abierto"});
+      toast("Reporte enviado. Ya aparece en el mapa.");
+      S.tipo=null; S.foto=null; $("#fRep").reset(); $("#repPrev").hidden=true; $("#repPrevPh").textContent="Tomar o subir foto (opcional)"; $("#emvarias").hidden=true;
+      $("#tipos").querySelectorAll("[data-tipo]").forEach(x => x.setAttribute("aria-pressed","false"));
+      setView("mapa");
+    } catch { toast("No se pudo enviar. Revisa la conexión e intenta de nuevo."); }
+    btn.disabled = false; });
+  wireSeg("#entDia","entDia"); wireSeg("#entFranja","entFranja"); wireSeg("#valEstado","valLimpio");
+  $("#fEnt").addEventListener("submit", async e => { e.preventDefault();
+    if (!S.entDia || !S.entFranja) { toast("Elige el día y la franja."); return; }
+    try { await Store.add("entregas", {cuadra:S.cuadra, dia:S.entDia, franja:S.entFranja, casa:$("#entCasa").value.trim().slice(0,40), ts:Date.now()});
+      toast("Entrega agendada. +10 puntos para tu cuadra."); $("#fEnt").reset(); S.entDia=S.entFranja=null;
+      document.querySelectorAll("#entDia [data-v], #entFranja [data-v]").forEach(x => x.setAttribute("aria-pressed","false"));
+    } catch { toast("No se pudo agendar. Intenta de nuevo."); } });
+  $("#fVal").addEventListener("submit", async e => { e.preventDefault();
+    if (S.valLimpio==null) { toast("Indica si el punto amaneció limpio."); return; }
+    const fecha = dayKey(new Date());
+    try { await Store.put("validaciones", `${S.cuadra}_${fecha}`, {cuadra:S.cuadra, fecha, limpio:S.valLimpio==="1", foto:S.valFoto||"", ts:Date.now()});
+      toast(S.valLimpio==="1" ? "Validado: la cuadra suma un día invicto." : "Registrado: hoy no cuenta como día invicto.");
+    } catch { toast("No se pudo guardar. Intenta de nuevo."); } });
+  document.addEventListener("click", async e => { const b = e.target.closest("[data-resolve]"); if(!b) return;
+    b.disabled = true; try { await Store.patch("reportes", b.dataset.resolve, {estado:"resuelto", resuelto_ts:Date.now()}); toast("Marcado como resuelto."); } catch { toast("No se pudo actualizar."); b.disabled=false; } });
+  $("#simAlert").addEventListener("click", () => toast("Esquina Viva: el carro pasa en 30 minutos. Ya puedes llevar tu bolsa a la franja demarcada."));
+}
+
+renderStatic(); wire(); setView(lsGet("ev_view","reportar")); render();
+setInterval(renderAlert, 30000);
+Store.init();
+})();
+</script>
+</body>
+</html>
