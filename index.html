@@ -169,6 +169,7 @@ a{color:var(--accent);font-weight:600}
       <p><b>Escombros y voluminosos</b> los recoge Emvarias con solicitud previa.</p>
       <a href="https://www.emvarias.com.co" target="_blank" rel="noopener">Solicitar recolección en Emvarias</a>
     </div>
+    <p class="muted" style="font-size:.82rem">Al enviar, el celular te pide la ubicación para poner el punto exacto en el mapa. Si no la das, el punto se ubica en la cuadra elegida.</p>
     <button class="btn" id="repBtn" type="submit">Enviar reporte</button>
   </form>
 </section>
@@ -302,12 +303,23 @@ const Store = (() => {
   }
   async function pullAll(){ try { await Promise.all(cols.map(pull)); S.shared = true; } catch (e) { console.warn("Supabase:", e); S.shared = false; } render(); }
   function saveLocal(c){ lsSet("ev_"+c, local[c]); S[c] = local[c].slice(); render(); }
+  // Puntos (cuadras/esquinas) desde la tabla "puntos". Si no existe o está vacía, se usan los de CUADRAS.
+  async function loadPuntos(){
+    try {
+      const { data, error } = await sb.from("puntos").select("*").eq("activo", true).order("orden");
+      if (error || !data || !data.length) return;
+      CUADRAS.splice(0, CUADRAS.length, ...data.map(p => ({id:p.id, name:p.nombre, short:p.corto, lat:+p.lat, lng:+p.lng})));
+      if (!CUADRAS.some(c => c.id === S.cuadra)) { S.cuadra = CUADRAS[0].id; lsSet("ev_cuadra", S.cuadra); }
+      $("#cuadra").innerHTML = CUADRAS.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
+      $("#cuadra").value = S.cuadra;
+    } catch (e) { console.warn("puntos:", e); }
+  }
   return {
     async init(){
       if (cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase) {
         try { sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey); } catch (e) { sb = null; }
       }
-      if (sb) { await pullAll(); setInterval(() => { if (!document.hidden) pullAll(); }, 20000); document.addEventListener("visibilitychange", () => { if (!document.hidden) pullAll(); }); }
+      if (sb) { await loadPuntos(); await pullAll(); setInterval(() => { if (!document.hidden) pullAll(); }, 20000); document.addEventListener("visibilitychange", () => { if (!document.hidden) pullAll(); }); }
       else { cols.forEach(c => S[c] = local[c].slice()); render(); }
     },
     async add(c, data){
@@ -420,7 +432,22 @@ function repItem(r, withAction){
   return `<div class="card rep">${img}<div style="min-width:0;display:flex;flex-direction:column;gap:4px"><b>${esc(t.label)}</b><div class="meta">${pill}<span>${esc(c?c.short:"")}</span><span>· ${fmtRel(r.ts)}</span></div>${r.nota?`<p style="font-size:.9rem">${esc(r.nota)}</p>`:""}${act}</div></div>`;
 }
 
-let _map = null, _markers = null;
+let _map = null, _markers = null, _zonas = null, _zKey = "";
+// Solo se usa la posición GPS si cae a menos de ~4 km del centro de Robledo (evita puntos de pruebas hechas lejos).
+function cercaDeRobledo(lat, lng){
+  if (lat == null || lng == null || lat === "" || lng === "") return false;
+  const dy = (+lat - 6.275) * 111, dx = (+lng + 75.598) * 110.6;
+  return Number.isFinite(dx) && Number.isFinite(dy) && Math.hypot(dx, dy) < 4;
+}
+// Pide la ubicación del celular (máx. 8 s). Si la persona no la da, devuelve null.
+function getPos(){
+  return new Promise(res => {
+    if (!navigator.geolocation) return res(null);
+    navigator.geolocation.getCurrentPosition(
+      p => res({lat: +p.coords.latitude.toFixed(6), lng: +p.coords.longitude.toFixed(6)}),
+      () => res(null), {enableHighAccuracy:true, timeout:8000, maximumAge:60000});
+  });
+}
 function renderMap(){
   if (!window.L) return;
   const container = document.getElementById("leafmap");
@@ -431,11 +458,15 @@ function renderMap(){
       attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       maxZoom:19
     }).addTo(_map);
+    _zonas = L.layerGroup().addTo(_map);
     _markers = L.layerGroup().addTo(_map);
+  }
+  const zKey = CUADRAS.map(c => c.id+c.lat+c.lng).join("|");
+  if (zKey !== _zKey) { _zKey = zKey; _zonas.clearLayers();
     CUADRAS.forEach(c => {
       L.circle([c.lat, c.lng], {radius:40, color:"#1E6B45", weight:2, fillColor:"#1E6B45", fillOpacity:0.12})
         .bindTooltip(c.short, {permanent:true, direction:"top", className:"cuadra-tip"})
-        .addTo(_map);
+        .addTo(_zonas);
     });
   }
   _markers.clearLayers();
@@ -443,11 +474,13 @@ function renderMap(){
   S.reportes.slice(0,120).forEach(r => {
     const c = CUADRAS.find(x => x.id===r.cuadra); if (!c) return;
     const col = r.estado==="resuelto" ? "#5B6B61" : (r.acc||r.tipo==="escombros"||r.tipo==="anden") ? "#B42318" : "#C2410C";
+    const gps = cercaDeRobledo(r.lat, r.lng);
     const h = hash(r.id);
     const dlat = ((h%200)-100)/80000, dlng = (((h>>8)%200)-100)/80000;
+    const pos = gps ? [+r.lat, +r.lng] : [c.lat+dlat, c.lng+dlng];
     const t = TIPOS.find(x => x.id===r.tipo)||{label:"Reporte"};
-    L.circleMarker([c.lat+dlat, c.lng+dlng], {radius:9, color:"#fff", weight:2, fillColor:col, fillOpacity:.9})
-      .bindPopup(`<b>${esc(t.label)}</b><br><span style="color:#5B6B61">${esc(c.short)} · ${fmtRel(r.ts)}</span>${r.acc?`<br><b style="color:#B42318">⚠ Bloquea el paso</b>`:""}${r.nota?`<br>${esc(r.nota)}`:""}${r.estado==="resuelto"?`<br><span style="color:#1E7A3C">✓ Resuelto</span>`:""}`)
+    L.circleMarker(pos, {radius:9, color:"#fff", weight:2, fillColor:col, fillOpacity:.9})
+      .bindPopup(`<b>${esc(t.label)}</b><br><span style="color:#5B6B61">${esc(c.short)} · ${fmtRel(r.ts)}</span>${r.acc?`<br><b style="color:#B42318">⚠ Bloquea el paso</b>`:""}${r.nota?`<br>${esc(r.nota)}`:""}${r.estado==="resuelto"?`<br><span style="color:#1E7A3C">✓ Resuelto</span>`:""}<br><small style="color:#5B6B61">${gps?"Ubicación GPS del reporte":"Ubicación aproximada (cuadra elegida)"}</small>`)
       .addTo(_markers);
   });
   setTimeout(() => _map && _map.invalidateSize(), 80);
@@ -502,13 +535,18 @@ function wire(){
     if (!S.tipo) { toast("Elige qué ves antes de enviar."); return; }
     const btn = $("#repBtn"); btn.disabled = true;
     try {
-      await Store.add("reportes", {cuadra:S.cuadra, tipo:S.tipo, acc:$("#repAcc").checked, nota:$("#repNota").value.trim().slice(0,280), foto:S.foto||"", ts:Date.now(), estado:"abierto"});
+      btn.textContent = "Ubicando el punto…";
+      const pos = await getPos();
+      btn.textContent = "Enviando…";
+      const row = {cuadra:S.cuadra, tipo:S.tipo, acc:$("#repAcc").checked, nota:$("#repNota").value.trim().slice(0,280), foto:S.foto||"", ts:Date.now(), estado:"abierto"};
+      try { await Store.add("reportes", pos ? {...row, ...pos} : row); }
+      catch (err) { if (!pos) throw err; console.warn("Reintento sin lat/lng:", err); await Store.add("reportes", row); }
       toast("Reporte enviado. Ya aparece en el mapa.");
       S.tipo=null; S.foto=null; $("#fRep").reset(); $("#repPrev").hidden=true; $("#repPrevPh").textContent="Tomar o subir foto (opcional)"; $("#emvarias").hidden=true;
       $("#tipos").querySelectorAll("[data-tipo]").forEach(x => x.setAttribute("aria-pressed","false"));
       setView("mapa");
     } catch { toast("No se pudo enviar. Revisa la conexión e intenta de nuevo."); }
-    btn.disabled = false; });
+    btn.disabled = false; btn.textContent = "Enviar reporte"; });
   wireSeg("#entDia","entDia"); wireSeg("#entFranja","entFranja"); wireSeg("#valEstado","valLimpio");
   $("#fEnt").addEventListener("submit", async e => { e.preventDefault();
     if (!S.entDia || !S.entFranja) { toast("Elige el día y la franja."); return; }
